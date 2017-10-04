@@ -8,9 +8,9 @@
 package com.github.giedomak.telepathdb.physicaloperators
 
 import com.github.giedomak.telepathdb.TelepathDB
+import com.github.giedomak.telepathdb.datamodels.graph.Path
 import com.github.giedomak.telepathdb.datamodels.graph.PathStream
 import com.github.giedomak.telepathdb.utilities.Logger
-import java.util.*
 
 /**
  * Open hash-join to maintain compatibility with concatenating streams instead of evaluating physical plans.
@@ -18,7 +18,8 @@ import java.util.*
 class OpenHashJoin(
         private val stream1: PathStream,
         private val stream2: PathStream,
-        private val telepathDB: TelepathDB = TelepathDB
+        private val telepathDB: TelepathDB = TelepathDB,
+        private val materialize: Boolean = true
 ) {
 
     /**
@@ -31,22 +32,29 @@ class OpenHashJoin(
     fun evaluate(): PathStream {
 
         // TODO: Make sure the memoryManager can guarantee a free spot
-        val salt = Random().nextLong()
+//        val salt = Random().nextLong()
+
+        val hashMap = hashMapOf<Long, MutableList<Path>>()
 
         // Put all Paths from stream1 into a HashMap with the lastNode() as key
-        stream1.paths.forEach { telepathDB.memoryManager[salt + it.nodes.last().hashCode().toLong()] = it }
+        // stream1.paths.forEach { telepathDB.memoryManager[salt + it.nodes.last().id] = it }
 
-        Logger.debug("Done creating the hashTable, now concatenating")
+        Logger.debug("Creating the hashMap right now...")
+
+        stream1.paths.forEach { hashMap.compute(it.nodes.last().id, { _, value -> value?.add(it); value ?: mutableListOf(it) }) }
+
+        Logger.debug("Done creating the hashMap, now concatenating")
 
         // Get all Paths from the HashMap which have the firstNode() as key, and concatenate.
         // By passing telepathDB as the second argument of the PathStream constructor, it gets materialized again.
         return PathStream(
                 telepathDB,
                 stream2.paths.flatMap { v2 ->
-                    telepathDB.memoryManager[salt + v2.nodes.first().hashCode().toLong()]
+                    hashMap.getOrDefault(v2.nodes.first().id, emptyList<Path>())
+                            .parallelStream()
                             .map { v1 -> telepathDB.pathIdentifierStore.concatenatePaths(v1, v2) }
                             .filter { it != null }
                 }
-        )
+        , false)
     }
 }

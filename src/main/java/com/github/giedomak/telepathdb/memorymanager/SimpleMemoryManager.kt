@@ -10,8 +10,7 @@ package com.github.giedomak.telepathdb.memorymanager
 import com.github.giedomak.telepathdb.datamodels.graph.Path
 import com.github.giedomak.telepathdb.memorymanager.spliterator.PartitioningSpliterator.Companion.partition
 import com.github.giedomak.telepathdb.utilities.Logger
-import org.apache.commons.lang3.SerializationUtils
-import org.parboiled.common.Tuple2
+import org.apache.commons.lang.SerializationUtils
 import java.io.*
 import java.util.stream.Stream
 import kotlin.streams.toList
@@ -21,17 +20,17 @@ import kotlin.streams.toList
  */
 object SimpleMemoryManager : MemoryManager {
 
-    private const val MEMORY_BUDGET: Int = 1_000_000
-    private const val CACHE_BUDGET: Int = 100_000
-    private const val PARTITION_SIZE: Int = 100_000
-    private const val BATCH_SIZE: Int = 100
+    private const val MEMORY_BUDGET: Int = 3_000_000
+    private const val CACHE_BUDGET: Int = 200_000
+    private const val PARTITION_SIZE: Int = 50_000
+    private const val BATCH_SIZE: Int = 5_000
 
     // HashMaps in which we store the data
     private val pathHashMap = hashMapOf<Long, MutableList<List<Path>>>()
     private val fileHashMap = hashMapOf<Long, MutableList<File>>()
 
     // Small cache holding one piece of data
-    private var cache = Tuple2(-1L, emptyList<Path>())
+    private var cache = Pair(-1L, emptyList<Path>())
 
     // Keep track of how much memory we have used so far
     private var memoryUsed = 0
@@ -80,8 +79,9 @@ object SimpleMemoryManager : MemoryManager {
      */
     override fun clear() {
         pathHashMap.clear()
+        fileHashMap.values.forEach { it.forEach { it.delete() } }
         fileHashMap.clear()
-        cache = Tuple2(-1L, emptyList<Path>())
+        cache = Pair(-1L, emptyList<Path>())
         memoryUsed = 0
         maxId = 0L
     }
@@ -103,7 +103,7 @@ object SimpleMemoryManager : MemoryManager {
 
         if (paths.size * PARTITION_SIZE + files.size * PARTITION_SIZE < CACHE_BUDGET) {
             // Small enough for our cache, so store and return true
-            cache = Tuple2(id, getCombinedResults(paths, files).toList())
+            cache = Pair(id, getCombinedResults(paths, files).toList())
             return true
         }
 
@@ -124,8 +124,8 @@ object SimpleMemoryManager : MemoryManager {
 
     private fun getCombinedResults(id: Long): Stream<Path> {
 
-        if (cache.a == id) {
-            return cache.b.stream()
+        if (cache.first == id) {
+            return cache.second.stream()
         }
 
         val paths = pathHashMap.getOrDefault(id, emptyList<List<Path>>())
@@ -133,7 +133,7 @@ object SimpleMemoryManager : MemoryManager {
 
         // Store and use the cache when possible
         if (storeInCacheWhenPossible(id, paths, files))
-            return cache.b.stream()
+            return cache.second.stream()
 
         // Otherwise we just stream our results without the cache
         return getCombinedResults(paths, files)
@@ -232,7 +232,7 @@ object SimpleMemoryManager : MemoryManager {
      * @return The object.
      */
     private fun deserialize(data: ByteArray): Any {
-        return SerializationUtils.deserialize<Any>(data)
+        return SerializationUtils.deserialize(data)
     }
 
 }

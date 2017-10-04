@@ -15,7 +15,7 @@ import com.github.giedomak.telepathdb.datamodels.stores.PathIdentifierStore.maxI
 import com.github.giedomak.telepathdb.datamodels.stores.PathIdentifierStore.pathEdgeSerializationStore
 import com.github.giedomak.telepathdb.datamodels.stores.PathIdentifierStore.pathIdentifierStore
 import com.github.giedomak.telepathdb.utilities.Logger
-import org.apache.commons.lang3.StringUtils
+import org.apache.commons.lang.StringUtils
 import java.util.stream.Collectors
 
 /**
@@ -121,6 +121,13 @@ object PathIdentifierStore {
      */
     fun getPathIds(k: Int): List<Long> {
         return kPathIdentifierStore.getOrDefault(k, emptyList())
+    }
+
+    fun clear() {
+        pathIdentifierStore.clear()
+        pathEdgeSerializationStore.clear()
+        kPathIdentifierStore.clear()
+        maxId = 1
     }
 
     /**
